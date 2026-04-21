@@ -7,7 +7,7 @@ export default function TaskmasterLayout({
 }) {
   return (
     
-    <div className="relative w-full max-w-md mx-auto min-h-dvh overflow-x-clip">
+    <div className="relative w-full max-w-md mx-auto  overflow-x-clip">
       
       {/* This is the area where your pages (Home, AI, User) render */}
       <main className="pb-0"> 

@@ -22,6 +22,10 @@ export async function connectToDB() {
     const opts = {
       bufferCommands: false,
       dbName: "taskmaster",
+      maxPoolSize: 10,             // Don't open more than 10 sockets at once
+      serverSelectionTimeoutMS: 5000, // If Atlas is down, fail in 5s (not 10s)
+      socketTimeoutMS: 45000,      // Tell Mongoose to close idle sockets gracefully before Atlas kills them
+      family: 4,                   // Prefer IPv4 over IPv6
     };
 
     cached.promise = mongoose.connect(MONGODB_URI, opts).then((mongoose) => {

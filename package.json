@@ -11,8 +11,11 @@
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
     "@motionone/utils": "^10.18.0",
+    "@ncdai/react-wheel-picker": "^1.2.2",
+    "@serwist/next": "^9.5.7",
     "@studio-freight/lenis": "^1.0.42",
     "canvas-confetti": "^1.9.4",
+    "embla-carousel-react": "^8.6.0",
     "fluent-ffmpeg": "^2.1.3",
     "framer-motion": "^12.34.3",
     "lenis": "^1.3.17",
@@ -25,9 +28,11 @@
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
     "react-markdown": "^10.1.0",
+    "react-mobile-picker": "^1.2.0",
     "remark-breaks": "^4.0.0",
     "sonner": "^2.0.7",
-    "swiper": "^12.1.2"
+    "swiper": "^12.1.2",
+    "swr": "^2.4.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

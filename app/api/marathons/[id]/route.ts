@@ -108,7 +108,7 @@ export async function PATCH(
                         "steps.$.detail": newDetail
                     }
                 },
-                { new: true } // Return the updated document
+                { returnDocument: 'after' } // Return the updated document
             );
 
             if (!updatedMarathon) return NextResponse.json({ error: 'Not found' }, { status: 404 });

@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { User, Trophy, Pause } from 'lucide-react';
+import { useMemo } from "react";
+import useSWR from "swr";
 
 
 interface Marathon {
@@ -13,64 +15,66 @@ interface Marathon {
 }
 
 export default function Marathons() {
-  const router = useRouter();
-  const [marathons, setMarathons] = useState<Marathon[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
 
-  // 1. Fetch the Marathons on load
-  useEffect(() => {
-    const fetchMarathons = async () => {
-      try {
-        const res = await fetch('/api/marathons');
-        const data = await res.json();
-        
-        if (data.success) {
-          setMarathons(data.marathons);
-        }
-      } catch (error) {
-        console.error("Failed to fetch marathons:", error);
-      } finally {
-        setIsLoading(false);
-      }
+  const router = useRouter();
+
+
+  const { data: marathonResponse, isLoading: marathonIsLoading } = useSWR<{
+    success: boolean;
+    marathons: Marathon[];
+  }>('/api/marathons');
+
+  // 2. Sort and Copy (useMemo + Spread operator)
+  const sortedMarathons = useMemo(() => {
+    if (!marathonResponse?.marathons) return [];
+
+    const STATUS_RANK: Record<string, number> = {
+      active: 1,
+      paused: 2,
+      completed: 3,
     };
 
-    if(marathons.length > 0) return; 
+    // The [...] spread creates a copy so we don't mutate the SWR cache!
+    return [...marathonResponse.marathons].sort((a, b) => {
+      return (STATUS_RANK[a.status] || 99) - (STATUS_RANK[b.status] || 99);
 
-    fetchMarathons();
-  }, []);
+    });
+  }, [marathonResponse]);
 
-  if (isLoading) {
-    return <div className="p-6 text-center text-gray-500">Loading your marathons...</div>;
+  
+
+  if (marathonIsLoading) {
+    return <div className="p-6 font-manrope text-center text-gray-500">Loading your marathons...</div>;
   }
 
   return (
-    <div className="h-auto  mt-8 pb-16 font-manrope mb-32">
+    <div className="h-auto font-manrope mt-6 pb-16 font-manrope mb-16">
       <div className="flex items-center gap-2 mb-3">
-        <h1 className="text-xl font-syne font-semibold text-gray-900">Your Marathons</h1>
+        <h1 className="text-xl  tracking-tight font-semibold text-gray-900">Your Marathons</h1>
         <span className="border text-purple-600 text-xs font-bold px-2 py-0.5 rounded-full">
-          {marathons.length}
+          {sortedMarathons.length}
         </span>
       </div>
 
       <div className="space-y-3">
-        {marathons.map((marathon) => {
+        {sortedMarathons.map((marathon) => {
           // Calculate Progress dynamically
           const totalTasks = marathon.steps.length;
           const completedTasks = marathon.steps.filter(step => step.isCompleted).length;
           const progressPercentage = totalTasks === 0 ? 0 : Math.round((completedTasks / totalTasks) * 100);
 
           return (
-            <MarathonCard 
-              key={marathon._id} 
-              marathon={marathon} 
+            <MarathonCard
+              key={marathon._id}
+              marathon={marathon}
               totalTasks={totalTasks}
               progress={progressPercentage}
-              onClick={() => router.push(`/marathon/${marathon._id}`)} 
+              onClick={() => router.push(`/marathon/${marathon._id}`)}
             />
           );
         })}
 
-        {marathons.length === 0 && (
+        {sortedMarathons.length === 0 && (
           <div className="text-center p-8 bg-white rounded-2xl border border-dashed border-gray-300">
             <p className="text-gray-500">No marathons yet. Start one today!</p>
           </div>
@@ -95,13 +99,13 @@ function MarathonCard({ marathon, totalTasks, progress, onClick }: any) {
         return {
           card: "bg-gradient-to-br from-emerald-50 to-white border-emerald-300 shadow-sm shadow-emerald-100/50 hover:shadow-md hover:shadow-emerald-200/50",
           // CHANGED: Light green box, dark green text (Matches the others)
-          iconBox: "bg-emerald-100 text-emerald-600 border-emerald-300", 
+          iconBox: "bg-emerald-100 text-emerald-600 border-emerald-300",
           title: "text-emerald-950",
           text: "text-emerald-600",
           ring: "text-emerald-500",
           track: "text-emerald-100",
           // CHANGED: Removed fill, added strokeWidth
-          icon: <Trophy size={22} strokeWidth={2.5} />, 
+          icon: <Trophy size={22} strokeWidth={2.5} />,
           label: "Completed"
         };
       case 'paused':
@@ -113,7 +117,7 @@ function MarathonCard({ marathon, totalTasks, progress, onClick }: any) {
           ring: "text-gray-400",
           track: "text-gray-200",
           // CHANGED: Removed fill, added strokeWidth
-          icon: <Pause size={22} strokeWidth={2.5} />, 
+          icon: <Pause size={22} strokeWidth={2.5} />,
           label: "Paused"
         };
       case 'active':
@@ -126,7 +130,7 @@ function MarathonCard({ marathon, totalTasks, progress, onClick }: any) {
           ring: "text-purple-600",
           track: "text-gray-100",
           // CHANGED: Removed fill, added strokeWidth
-          icon: <User size={24} strokeWidth={2.5} />, 
+          icon: <User size={24} strokeWidth={2.5} />,
           label: "Active"
         };
     }
@@ -135,14 +139,14 @@ function MarathonCard({ marathon, totalTasks, progress, onClick }: any) {
   const theme = getTheme(marathon.status);
 
   return (
-    <div 
+    <div
       onClick={onClick}
       className={`${theme.card} p-3 rounded-3xl border flex items-center gap-4 cursor-pointer transition-all duration-300 active:scale-95`}
     >
       {/* Left Icon (Dynamically swaps based on status) */}
-      <div 
-      
-      className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 border transition-colors duration-300 ${theme.iconBox}`}>
+      <div
+
+        className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 border transition-colors duration-300 ${theme.iconBox}`}>
         {theme.icon}
       </div>
 
@@ -151,7 +155,7 @@ function MarathonCard({ marathon, totalTasks, progress, onClick }: any) {
         <h3 className={`font-bold text-base line-clamp-1 transition-colors duration-300 ${theme.title}`}>
           {marathon.title}
         </h3>
-        
+
         {/* Subtitle with Task Count AND Status Badge */}
         <div className="flex items-center gap-2 mt-0.5">
           <p className={`text-sm font-medium transition-colors duration-300 ${theme.text}`}>
