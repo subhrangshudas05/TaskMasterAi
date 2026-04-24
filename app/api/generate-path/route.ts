@@ -2,19 +2,17 @@
 import { NextResponse } from 'next/server';
 import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold, SchemaType, Schema } from "@google/generative-ai";
 
-
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
 export async function POST(req: Request) {
     try {
         const { formData } = await req.json();
-        const signal = req.signal; // 1. Catch the abort signal
+        const signal = req.signal; // Catch the abort signal
 
         if (signal.aborted) throw new Error('AbortError');
 
-        console.log("inside the api wprking FORM DATA:", formData);
+        console.log("inside the api working FORM DATA:", formData);
 
-        // Add ": Schema" right here, and remove "as const" from the end!
         const marathonSchema: Schema = {
             type: SchemaType.OBJECT,
             properties: {
@@ -40,12 +38,11 @@ export async function POST(req: Request) {
             required: ["marathonTitle", "tasks"]
         };
 
-        const model = genAI.getGenerativeModel({
-            model: "gemini-2.5-flash",
-            // Force JSON output
+        // 1. Extract shared config so both models use the EXACT same brain
+        const sharedModelConfig = {
             generationConfig: {
                 responseMimeType: "application/json",
-                responseSchema: marathonSchema, // <--- THIS IS THE MAGIC LINE
+                responseSchema: marathonSchema,
             },
             safetySettings: [
                 { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
@@ -61,8 +58,7 @@ export async function POST(req: Request) {
       3. Focus on practical action (e.g., "Write 10 lines of code", "Read 1 chapter") over vague concepts.
       4. Spread the tasks logically across the user's deadline.
       5. STRICTLY ONE TASK PER DAY. Do not ever repeat a "day" number in the tasks array.`
-      
-        });
+        };
 
         const prompt = `
       Analyze this goal and create a high-impact marathon plan:
@@ -75,39 +71,53 @@ export async function POST(req: Request) {
       Remember: Exactly one task per day. If the goal is too big, provide a "Simplified Version" that fits this timeframe.
     `;
 
-        // 2. Pass the signal to the Gemini SDK
-        const result = await model.generateContent({
-            contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        }, { signal });
+        const requestContents = { contents: [{ role: 'user', parts: [{ text: prompt }] }] };
+        let responseText = "";
 
-        const responseText = result.response.text();
+        // 2. The Fallback Logic
+        try {
+            // TRY 1: Primary Model
+            const primaryModel = genAI.getGenerativeModel({
+                model: "gemini-2.5-flash",
+                ...sharedModelConfig
+            });
+            
+            const result = await primaryModel.generateContent(requestContents, { signal });
+            responseText = result.response.text();
+
+        } catch (primaryError: any) {
+            // If the user manually aborted, DO NOT retry. Just throw it to the main catch block.
+            if (primaryError.name === 'AbortError' || primaryError.message === 'AbortError') {
+                throw primaryError;
+            }
+
+            // Log the error and announce the 2nd try
+            console.log(`⚠️ Gemini 2.5 Flash failed: ${primaryError.message}`);
+            console.log("🔄 Initiating Fallback 2nd Try using gemini-2.5-flash-lite...");
+
+            // TRY 2: Lite Model
+            const fallbackModel = genAI.getGenerativeModel({
+                model: "gemini-2.5-flash-lite",
+                ...sharedModelConfig
+            });
+
+            // If this one fails, it will skip to the main catch block at the bottom
+            const fallbackResult = await fallbackModel.generateContent(requestContents, { signal });
+            responseText = fallbackResult.response.text();
+        }
+
+        // 3. Parse and Return Success
         const parsedData = JSON.parse(responseText);
-
         return NextResponse.json({ success: true, data: parsedData });
 
     } catch (error: any) {
+        // Main Error Handler (catches aborts, JSON parsing errors, or if BOTH models fail)
         if (error.name === 'AbortError' || error.message === 'AbortError') {
             console.log('API call aborted by client.');
             return NextResponse.json({ success: false, error: 'Aborted by user' }, { status: 499 });
         }
-        console.error('Gemini API Error:', error);
+        
+        console.error('Gemini API Error (Both attempts failed):', error);
         return NextResponse.json({ success: false, error: error.message }, { status: 500 });
     }
 }
-
-
-
-
-// Return ONLY a JSON object with this exact structure:
-//       {
-//         "marathonTitle": "A catchy, motivating 3-5 word title for this goal",
-//         "tasks": [
-//           {
-//             "id": "task-1",
-//             "day": 1,
-//             "title": "Short actionable title",
-//             "detail": "1-2 sentences of specific instructions or practical learning steps",
-//             "estimatedMinutes": (Must be <= daily capacity)
-//           }
-//         ]
-//       }

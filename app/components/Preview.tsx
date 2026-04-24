@@ -18,7 +18,7 @@ interface PreviewProps {
     isSaving: boolean;
 }
 
-export default function Preview({ initialData, onAcceptMarathon ,isSaving}: PreviewProps) {
+export default function Preview({ initialData, onAcceptMarathon, isSaving }: PreviewProps) {
     const [data, setData] = useState(initialData);
     const router = useRouter();
     const [activeId, setActiveId] = useState<string | null>(null);
@@ -47,7 +47,7 @@ export default function Preview({ initialData, onAcceptMarathon ,isSaving}: Prev
 
             <div className="group absolute top-5 left-4 bg-black/8 hover:bg-black/12 p-2  rounded-full">
                 <div className="flex justify-between items-center ">
-                    <button onClick={handleBack} className="text-gray-500 group-hover:text-gray-700 flex items-center justify-center font-medium text-sm">
+                    <button onClick={handleBack} className="text-gray-500 active:scale-95 transition-all group-hover:text-gray-700 flex items-center justify-center font-medium text-sm">
                         <span className="flex items-center justify-center gap-1 leading-none">
                             <MoveLeft className="w-5 h-5" />
                         </span>
@@ -91,7 +91,7 @@ export default function Preview({ initialData, onAcceptMarathon ,isSaving}: Prev
 
                             {/* Task Card */}
                             <motion.div
-                        
+
                                 className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 group hover:border-purple-200  transition-all duration-200">
                                 <div className="flex justify-between items-start gap-4 mb-2">
                                     {activeId === task.id ? (
@@ -100,7 +100,7 @@ export default function Preview({ initialData, onAcceptMarathon ,isSaving}: Prev
                                             layout="position"
                                             rows={1}
                                             ref={(element) => autoResize(element)}
-                                            
+
                                             value={task.title}
                                             onBlur={() => setActiveId(null)}
                                             onChange={(e) => {
