@@ -20,13 +20,14 @@ export default function TaskCard({ task, onToggle, onDelete, isPast, isFuture }:
   const handleDelete = async () => {
     setIsDeleting(true);
     await onDelete(task._id);
-    // If the delete is successful, SWR will unmount this card automatically.
-    // If it fails, we reset the UI so they can try again.
+    
     setIsDeleting(false); 
     setShowDeleteModal(false);
   };
 
   const isPendingPast = isPast && !task.isCompleted;
+
+  const marathonTask:Boolean = task.marathonName !== undefined;
   
   const cardBorder = task.isCompleted
     ? "border-purple-100"
@@ -90,7 +91,7 @@ export default function TaskCard({ task, onToggle, onDelete, isPast, isFuture }:
         )}
 
         {/* ── Delete button top-right (only non-future, non-completed) ── */}
-        {!task.isCompleted && (
+        {!task.isCompleted && !marathonTask && (
           <button
             onClick={() => setShowDeleteModal(true)}
             className="absolute top-4 right-4 text-slate-300 hover:text-red-400 transition-colors z-20 opacity-100 sm:opacity-50 sm:group-hover:opacity-100 p-1"
