@@ -329,7 +329,7 @@ export default function MarathonExecutionPage() {
             <div className="flex justify-between items-center  pt-5 pb-2 relative z-50">
                 <button
                     onClick={() => router.push('/')}
-                    className="bg-black/5 hover:bg-black/10 p-2 rounded-full transition-colors"
+                    className="bg-black/5 hover:bg-black/10 p-2 active:scale-95 transition-all rounded-full "
                 >
                     <MoveLeft className="w-5 h-5 text-gray-700" />
                 </button>

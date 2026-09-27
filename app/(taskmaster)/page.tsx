@@ -74,9 +74,9 @@ export default function Home() {
   const completedTasks = tasksArray.filter(t => t.isCompleted).length;
 
   // 4. THE JITTER SHIELD 
-  if (!isMounted || (authIsLoading && !localAuth)) {
-    return <div className="min-h-dvh bg-app-main w-full" />;
-  }
+  // if (!isMounted || (authIsLoading && !localAuth)) {
+  //   return <div className="min-h-dvh bg-app-main w-full" />;
+  // }
 
   return (
     <div className="relative flex flex-col min-h-screen font-manrope py-6 px-6 bg-app-main w-full mx-auto ">

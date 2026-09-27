@@ -131,15 +131,15 @@ export default function RootLayout({
            antialiased`}
       >
         {/* <LenisProvider> */}
-        <div className="relative w-full bg-app-main max-w-md mx-auto min-h-dvh overflow-x-clip">
+          <div className="relative w-full bg-app-main max-w-md mx-auto min-h-dvh overflow-x-clip">
 
-          <SWRprovider>
-            <AuthProvider>
-              <OfflineSync />
-              <script src="http://localhost:3000/widget.js?token=ce632f34-d54b-462f-aeb8-8d27f56a85a5" async></script>                {children}
-            </AuthProvider>
-          </SWRprovider>
-        </div>
+            <SWRprovider>
+              <AuthProvider>
+                <OfflineSync />
+                {children}
+              </AuthProvider>
+            </SWRprovider>
+          </div>
         {/* </LenisProvider> */}
       </body>
     </html>
