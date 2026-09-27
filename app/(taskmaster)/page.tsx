@@ -19,11 +19,11 @@ export default function Home() {
   const router = useRouter();
   const { userId, isAuthenticated, userImage, userName } = useUser();
 
-  // useEffect(() => {
-  //   if (!userId) {
-  //     redirect('/login')
-  //   }
-  // }, [userId, isAuthenticated, router])
+  useEffect(() => {
+    if (!userId) {
+      redirect('/login')
+    }
+  }, [userId, isAuthenticated, router])
 
   const profileName = userName.split(" ")[0]
 
