@@ -30,8 +30,8 @@
 }
 
 html {
-  /* Top 50% is Maroon (matches header), Bottom 50% is Black (matches footer) */
-  background: #000000;
+  /* Match the top of bg-app-main to prevent black line on top overscroll/safe-area */
+  background: #fbefbc;
 }
 
 body {
