@@ -38,13 +38,13 @@ export default function NotificationToggle() {
       setIsSupported(true);
       setPermission(Notification.permission);
       
-      // Ensure service worker is registered
-      navigator.serviceWorker.register('/sw.js').then((registration) => {
+      // Wait for the Serwist-managed service worker to be ready
+      navigator.serviceWorker.ready.then((registration) => {
         return registration.pushManager.getSubscription();
       }).then(subscription => {
         setIsSubscribed(!!subscription);
       }).catch(err => {
-        console.error('ServiceWorker registration error:', err);
+        console.error('ServiceWorker ready error:', err);
       });
     }
   }, []);
@@ -79,12 +79,8 @@ export default function NotificationToggle() {
         }
       }
 
-      // Ensure registration is active
-      let registration = await navigator.serviceWorker.getRegistration();
-      if (!registration) {
-        registration = await navigator.serviceWorker.register('/sw.js');
-      }
-      await navigator.serviceWorker.ready;
+      // Use the Serwist-managed service worker (already registered by the framework)
+      const registration = await navigator.serviceWorker.ready;
 
       const vapidPublicKey = await getVapidPublicKey();
       
@@ -95,27 +91,18 @@ export default function NotificationToggle() {
          return;
       }
       
-      let subscription: PushSubscription | null = null;
-      try {
+      // Check if there's already an active push subscription we can reuse
+      let subscription = await registration.pushManager.getSubscription();
+      
+      if (subscription) {
+        // Already subscribed at browser level — just ensure backend knows
+        console.log('Reusing existing push subscription');
+      } else {
+        // Create new subscription
+        const appServerKey = urlBase64ToUint8Array(vapidPublicKey);
         subscription = await registration.pushManager.subscribe({
           userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
-        });
-      } catch (subError: any) {
-        console.warn('Initial subscribe failed, attempting recovery...', subError);
-        // Recovery for Android Chrome "push service error"
-        const existingSub = await registration.pushManager.getSubscription();
-        if (existingSub) {
-          await existingSub.unsubscribe().catch(() => {});
-        }
-        await registration.unregister().catch(() => {});
-        
-        registration = await navigator.serviceWorker.register('/sw.js');
-        await navigator.serviceWorker.ready;
-        
-        subscription = await registration.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
+          applicationServerKey: appServerKey,
         });
       }
 
@@ -157,34 +144,47 @@ export default function NotificationToggle() {
   };
 
   const unsubscribeUser = async () => {
+    setLoading(true);
     try {
-      const registration = await navigator.serviceWorker.ready;
-      const subscription = await registration.pushManager.getSubscription();
-      if (subscription) {
-        // Send to backend to remove
-        await fetch('/api/notifications/subscribe', {
-          method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ endpoint: subscription.endpoint })
-        });
-
-        await subscription.unsubscribe();
-        setIsSubscribed(false);
+      let endpoint: string | null = null;
+      if ('serviceWorker' in navigator) {
+        try {
+          const registration = await navigator.serviceWorker.ready;
+          const subscription = await registration.pushManager.getSubscription();
+          if (subscription) {
+            endpoint = subscription.endpoint;
+            await subscription.unsubscribe().catch(() => {});
+          }
+        } catch (e) {
+          console.warn('Error unsubscribing local service worker push:', e);
+        }
       }
+
+      // Always call the backend to remove from DB and reset permission
+      await fetch('/api/notifications/subscribe', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ endpoint, all: true })
+      });
+
+      setIsSubscribed(false);
     } catch (error) {
       console.error('Failed to unsubscribe the user:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
   const toggleSubscription = () => {
-    if (permission === 'denied') {
-      alert("Notifications are blocked by your browser. Please enable them in your browser settings for this site.");
-      return;
-    }
+    if (loading) return;
 
     if (isSubscribed) {
       unsubscribeUser();
     } else {
+      if (permission === 'denied') {
+        alert("Notifications are blocked by your browser. Please enable them in your browser settings for this site.");
+        return;
+      }
       subscribeUser();
     }
   };

@@ -9,8 +9,6 @@ export default function manifest(): MetadataRoute.Manifest {
     display: 'standalone', 
     background_color: '#fffaed', // 👈 CHANGE THIS to your exact Leaf Green hex
     theme_color: '#fffaed',      // 👈 Matches the top status bar to the splash screen
-    // @ts-ignore - Required for legacy Android Chrome push compatibility
-    gcm_sender_id: '103953800507',
     icons: [
       {
         src: '/sicon.png',

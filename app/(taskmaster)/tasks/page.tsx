@@ -7,6 +7,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Plus, Clock, Check, Lock, AlertCircle, ChevronDown, ChevronUp } from "lucide-react";
 import { redirect } from 'next/navigation'
 import AddTaskDialog from "@/app/components/AddTaskDialog";
+import TaskCreationSelectorSheet from "@/app/components/TaskCreationSelectorSheet";
+import AIQuickCaptureModal from "@/app/components/AIQuickCaptureModal";
 import useEmblaCarousel from 'embla-carousel-react';
 import useSWR, { useSWRConfig } from "swr";
 import TaskCard from "@/app/components/TaskCard";
@@ -35,6 +37,8 @@ export default function page() {
   const { userId, isAuthenticated, userImage, userName, userEmail } = useUser();
 
   const [open, setOpen] = useState(false);
+  const [showSelector, setShowSelector] = useState(false);
+  const [showAIModal, setShowAIModal] = useState(false);
   const [showCompleted, setShowCompleted] = useState(true);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
 
@@ -264,7 +268,7 @@ export default function page() {
       globalMutate('/api/task/summary', (currentSummary: string[] = []) => {
         return currentSummary.filter(dateStr => dateStr !== formattedDate);
       }, false);
-    } else if (!newStatus) {
+    } else if (!newStatus && isPastDay(new Date(formattedDate))) {
       globalMutate('/api/task/summary', (currentSummary: string[] = []) => {
         if (!currentSummary.includes(formattedDate)) return [...currentSummary, formattedDate];
         return currentSummary;
@@ -425,7 +429,7 @@ export default function page() {
                   const monthStr = date.toLocaleDateString('en-US', { month: 'short' });
                   const dayNum = date.getDate();
                   const dayStr = date.toLocaleDateString('en-US', { weekday: 'short' });
-                  const hasWarning = pendingDatesList?.includes(toDateString(date));
+                  const hasWarning = isPastDay(date) && pendingDatesList?.includes(toDateString(date));
 
                   return (
                     <button
@@ -578,26 +582,48 @@ export default function page() {
 
 
       {/* FAB Button */}
-      <motion.div
-        // 1. Only trigger setOpen if it is currently Today
-        onClick={() => !isPastDay(selectedDate) && setOpen(true)}
-        // 2. Dynamically apply opacity and pointer events
-        className={`fixed z-50 flex items-center justify-center w-18 aspect-square rounded-full right-4 bottom-24 md:right-1/2 md:translate-x-50 transition-all ${!isPastDay(selectedDate)
-          ? "cursor-pointer active:scale-90"
-          : "opacity-60 cursor-not-allowed pointer-events-none"
-          }`}
-      >
-        <motion.div
-          animate={{ width: ["48px", "80px", "80px", "48px", '48px'] }}
-          transition={{ duration: 3.5, repeat: Infinity, times: [0, 0.5, 0.6, 0.9, 1], ease: ["easeOut", "easeIn"] }}
-          className="absolute z-2 w-20 aspect-square rounded-full bg-[radial-gradient(circle_at_center,#7e69e8_20%,transparent_73%)]"
-        />
-        <div className="relative z-10 flex items-center justify-center w-12 aspect-square rounded-full bg-[#8728c6] ">
-          <Plus className="w-6 h-6 text-white" strokeWidth={2.5} />
-        </div>
-      </motion.div>
+      <AnimatePresence>
+        {!showSelector && (
+          <motion.div
+            key="fab"
+            initial={{ scale: 0, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0, opacity: 0 }}
+            transition={{ type: "spring", stiffness: 380, damping: 28 }}
+            // 1. Only trigger setShowSelector if it is currently Today
+            onClick={() => !isPastDay(selectedDate) && setShowSelector(true)}
+            // 2. Dynamically apply opacity and pointer events
+            className={`fixed z-50 flex items-center justify-center w-18 aspect-square rounded-full right-4 bottom-24 md:right-1/2 md:translate-x-50 transition-all ${!isPastDay(selectedDate)
+              ? "cursor-pointer active:scale-90"
+              : "opacity-60 cursor-not-allowed pointer-events-none"
+              }`}
+          >
+            <motion.div
+              animate={{ width: ["48px", "80px", "80px", "48px", '48px'] }}
+              transition={{ duration: 3.5, repeat: Infinity, times: [0, 0.5, 0.6, 0.9, 1], ease: ["easeOut", "easeIn"] }}
+              className="absolute z-2 w-20 aspect-square rounded-full bg-[radial-gradient(circle_at_center,#7e69e8_20%,transparent_73%)]"
+            />
+            <div className="relative z-10 flex items-center justify-center w-12 aspect-square rounded-full bg-[#8728c6] ">
+              <Plus className="w-6 h-6 text-white" strokeWidth={2.5} />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <AddTaskDialog open={open} onClose={() => setOpen(false)} onSave={onSaveTask} date={selectedDate} />
+
+      <TaskCreationSelectorSheet
+        open={showSelector}
+        onClose={() => setShowSelector(false)}
+        onSelectManual={() => setOpen(true)}
+        onSelectAI={() => setShowAIModal(true)}
+      />
+
+      <AIQuickCaptureModal
+        open={showAIModal}
+        onClose={() => setShowAIModal(false)}
+        date={selectedDate}
+      />
     </div>
   );
 }
@@ -631,20 +657,20 @@ const generateDateRange = () => {
   return dates;
 };
 
-export const toDateString = (d: Date) => {
+const toDateString = (d: Date) => {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
 };
 
-export const isSameDay = (d1: Date, d2: Date) => {
+const isSameDay = (d1: Date, d2: Date) => {
   return d1.getFullYear() === d2.getFullYear() &&
     d1.getMonth() === d2.getMonth() &&
     d1.getDate() === d2.getDate();
 };
 
-export const isPastDay = (d: Date) => {
+const isPastDay = (d: Date) => {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const checkDate = new Date(d);
@@ -652,7 +678,7 @@ export const isPastDay = (d: Date) => {
   return checkDate < today;
 };
 
-export const isFutureDay = (d: Date) => {
+const isFutureDay = (d: Date) => {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const checkDate = new Date(d);

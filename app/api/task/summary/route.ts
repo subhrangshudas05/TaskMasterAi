@@ -3,6 +3,8 @@ import { getServerSession } from 'next-auth/next';
 import { connectToDB } from '@/app/lib/mongoose';
 import Task from '@/app/models/Task';
 
+import { getISTDayBoundaries } from '@/app/lib/IstTime';
+
 export async function GET() {
     try {
         const session = await getServerSession();
@@ -10,9 +12,9 @@ export async function GET() {
 
         await connectToDB();
 
-        // Get the date 14 days ago, and the start of Today
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
+        // Get the date 28 days ago, and the start of Today in IST
+        const { startOfDay } = getISTDayBoundaries();
+        const today = startOfDay;
         
         const fourteenDaysAgo = new Date(today);
         fourteenDaysAgo.setDate(today.getDate() - 28);

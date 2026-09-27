@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "./components/AuthProvider";
+import { Toaster } from "sonner";
 import {
   Poppins,
   Federo,
@@ -10,21 +11,11 @@ import {
   Six_Caps,
   Oswald,
   Archivo,
-  Manrope,
-  Funnel_Sans
+  Manrope
 } from "next/font/google";
 import LenisProvider from "./lenisProvider";
 import { SWRprovider } from "./lib/SWRprovider";
 import OfflineSync from "./components/OfflineSync";
-
-
-
-const funnelSans = Funnel_Sans({
-  subsets: ["latin"],
-  // Funnel Sans is a variable font, but you can specify weights if needed
-  weight: ["300", "400", "500", "600", "700", "800"],
-  variable: "--font-funnel-sans", // Optional: for Tailwind integration
-});
 
 const manrope = Manrope({
   subsets: ['latin'],
@@ -135,6 +126,7 @@ export default function RootLayout({
 
             <SWRprovider>
               <AuthProvider>
+                <Toaster position="top-center" richColors />
                 <OfflineSync />
                 {children}
               </AuthProvider>

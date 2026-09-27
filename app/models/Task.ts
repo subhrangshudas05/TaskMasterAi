@@ -21,6 +21,23 @@ export interface ITask extends Document {
   marathonName?: string;
   stepId?: mongoose.Types.ObjectId | string; // <--- 2. Add to Interface
   detail?: string;
+
+  // Push notification state
+  reminderSent?: boolean;
+  reminderAttempts?: number;
+  reminderFailed?: boolean;
+  
+  nudge20Sent?: boolean;
+  nudge20Attempts?: number;
+  nudge20Failed?: boolean;
+  
+  nudge45Sent?: boolean;
+  nudge45Attempts?: number;
+  nudge45Failed?: boolean;
+  
+  nudge2hSent?: boolean;
+  nudge2hAttempts?: number;
+  nudge2hFailed?: boolean;
 }
 
 // 3. The Simplified Mongoose Schema
@@ -40,6 +57,23 @@ const TaskSchema = new Schema<ITask>({
   marathonName: { type: String },
   stepId: { type: Schema.Types.Mixed },
   detail: { type: String },
+
+  // Push notification state
+  reminderSent: { type: Boolean, default: false, index: true },
+  reminderAttempts: { type: Number, default: 0 },
+  reminderFailed: { type: Boolean, default: false },
+
+  nudge20Sent: { type: Boolean, default: false, index: true },
+  nudge20Attempts: { type: Number, default: 0 },
+  nudge20Failed: { type: Boolean, default: false },
+
+  nudge45Sent: { type: Boolean, default: false, index: true },
+  nudge45Attempts: { type: Number, default: 0 },
+  nudge45Failed: { type: Boolean, default: false },
+
+  nudge2hSent: { type: Boolean, default: false, index: true },
+  nudge2hAttempts: { type: Number, default: 0 },
+  nudge2hFailed: { type: Boolean, default: false },
 
 }, { timestamps: true });
 
