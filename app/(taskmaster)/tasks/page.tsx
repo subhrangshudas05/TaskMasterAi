@@ -34,7 +34,14 @@ export default function page() {
 
   const { mutate: globalMutate } = useSWRConfig(); // ADD THIS
   const router = useRouter();
-  const { userId, isAuthenticated, userImage, userName, userEmail } = useUser();
+  const { userId, isAuthenticated, userImage, userName, userEmail, isLoading: authIsLoading } = useUser();
+
+  useEffect(() => {
+    if (!authIsLoading && !userId) {
+      if (typeof navigator !== 'undefined' && !navigator.onLine && localStorage.getItem('taskmaster-auth')) return;
+      router.replace('/login');
+    }
+  }, [userId, authIsLoading, router]);
 
   const [open, setOpen] = useState(false);
   const [showSelector, setShowSelector] = useState(false);

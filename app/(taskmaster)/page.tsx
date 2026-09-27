@@ -31,7 +31,11 @@ export default function Home() {
   useEffect(() => {
     const savedUser = localStorage.getItem('taskmaster-auth');
     if (savedUser) {
-      setLocalAuth(JSON.parse(savedUser));
+      try {
+        setLocalAuth(JSON.parse(savedUser));
+      } catch {
+        localStorage.removeItem('taskmaster-auth');
+      }
     }
     setIsMounted(true);
   }, []);
@@ -42,41 +46,65 @@ export default function Home() {
       localStorage.setItem('taskmaster-auth', JSON.stringify(activeUser));
       setLocalAuth(activeUser);
     }
-  }, [userId, userName, userImage]); // 👈 localAuth is NOT in here, so it's perfectly safe!
+  }, [userId, userName, userImage]);
 
-  // --- STEP 3: The Smart Auth Guard (Your working code, upgraded) ---
+  // --- STEP 2: The Smart Auth Guard ---
   useEffect(() => {
-    if (isMounted && !authIsLoading && !userId) {
+    if (!isMounted) return;
 
-      // Are we offline with a cached profile? If yes, bypass the kick!
-      if (!navigator.onLine && localStorage.getItem('taskmaster-auth')) {
+    // While validating with server, wait
+    if (authIsLoading) return;
+
+    if (!userId) {
+      // Offline mode check: if offline AND user profile was cached, let them stay offline
+      if (typeof navigator !== 'undefined' && !navigator.onLine && localStorage.getItem('taskmaster-auth')) {
         console.log("✈️ Airplane Mode: Using local auth cache.");
         return;
       }
 
-      // Otherwise, kick to login
-      router.push('/login');
+      // If unauthenticated and online, clean stale storage and redirect cleanly
+      localStorage.removeItem('taskmaster-auth');
+      localStorage.removeItem('taskmaster-cache');
+      router.replace('/login');
     }
   }, [isMounted, authIsLoading, userId, router]);
 
+  // Determine whether we can safely show private dashboard content
+  const isOfflineWithCache = typeof navigator !== 'undefined' && !navigator.onLine && Boolean(localAuth);
+  const canShowContent = Boolean(userId) || isOfflineWithCache;
+
   // --- STEP 3: Setup UI Variables ---
-  // Use live data if available, otherwise fallback to our offline cache
   const displayProfileName = (userName || localAuth?.name || "There").split(" ")[0];
   const displayImage = userImage || localAuth?.image || "/useric.png";
   const dateKey = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
 
   const { data: tasks, isLoading: taskIsLoading } = useSWR(
-    dateKey ? `/api/task?date=${dateKey}` : null
+    canShowContent && dateKey ? `/api/task?date=${dateKey}` : null
   );
 
   const tasksArray = Array.isArray(tasks) ? tasks : [];
   const totalTasks = tasksArray.length;
   const completedTasks = tasksArray.filter(t => t.isCompleted).length;
 
-  // 4. THE JITTER SHIELD 
-  // if (!isMounted || (authIsLoading && !localAuth)) {
-  //   return <div className="min-h-dvh bg-app-main w-full" />;
-  // }
+  // 4. THE JITTER SHIELD: Never reveal private dashboard content before auth is verified
+  if (!isMounted || !canShowContent) {
+    return (
+      <div className="relative flex flex-col min-h-screen font-manrope py-6 px-6 bg-app-main w-full mx-auto">
+        <div className="flex mb-6 justify-between h-auto w-full items-center gap-3 animate-pulse">
+          <div className="flex gap-3 items-center">
+            <div className="w-12 h-12 rounded-full bg-black/10" />
+            <div className="flex flex-col gap-1.5">
+              <div className="w-12 h-3 bg-black/10 rounded" />
+              <div className="w-24 h-4 bg-black/10 rounded" />
+            </div>
+          </div>
+          <div className="w-9 h-9 rounded-lg bg-black/5" />
+        </div>
+        <div className="w-full h-24 rounded-2xl bg-black/5 animate-pulse mb-6" />
+        <ProgressCardSkeleton />
+      </div>
+    );
+  }
 
   return (
     <div className="relative flex flex-col min-h-screen font-manrope py-6 px-6 bg-app-main w-full mx-auto ">

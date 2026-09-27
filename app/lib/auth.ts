@@ -12,9 +12,11 @@ export const authOptions: AuthOptions = {
   ],
   session: {
     strategy: "jwt" as const, // Fast, stateless sessions
+    maxAge: 365 * 24 * 60 * 60, // 365 days (1 year rolling session)
+    updateAge: 24 * 60 * 60, // Automatically refreshed every 24 hours
   },
   pages: {
-    signIn: '/',
+    signIn: '/login',
   },
   callbacks: {
     // 1. Triggered exactly when the user clicks "Sign In"

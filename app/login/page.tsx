@@ -6,19 +6,18 @@ import Image from "next/image";
 import { LogOut } from "lucide-react";
 import { useUser } from '../hooks/useUser';
 import { useEffect } from 'react';
-import { redirect } from 'next/navigation'
-
+import { useRouter } from 'next/navigation';
 
 export default function page() {
-
+    const router = useRouter();
     const { data: session, status } = useSession();
     const { userId } = useUser();
 
     useEffect(() => {
         if (userId) {
-            redirect('/')
+            router.replace('/');
         }
-    }, [userId])
+    }, [userId, router]);
 
 
     return (

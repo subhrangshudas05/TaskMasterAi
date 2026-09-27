@@ -11,14 +11,20 @@ import { redirect } from 'next/navigation'
 import NotificationToggle from "@/app/components/NotificationToggle";
 
 export default function page() {
-   const router = useRouter();
-    const { userId, isAuthenticated, userImage, userName } = useUser();
-  
-    useEffect(() => {
-      if (!userId) {
-        redirect('/login')
-      }
-    }, [userId, isAuthenticated, router])
+  const router = useRouter();
+  const { userId, isLoading: authIsLoading } = useUser();
+
+  useEffect(() => {
+    if (!authIsLoading && !userId) {
+      if (typeof navigator !== 'undefined' && !navigator.onLine && localStorage.getItem('taskmaster-auth')) return;
+      router.replace('/login');
+    }
+  }, [userId, authIsLoading, router]);
+
+  if (authIsLoading || !userId) {
+    return <div className="w-full min-h-dvh bg-app-main p-6" />;
+  }
+
   return (
     <div className='w-full min-h-dvh text-dark bg-app-main p-6 font-manrope'>
       <h1 className="text-3xl font-black text-[#3b0764] mb-8">Settings</h1>
