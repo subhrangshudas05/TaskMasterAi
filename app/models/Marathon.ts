@@ -8,6 +8,7 @@ export interface IMarathon extends Document {
   deadline: string;  
   status: 'active' | 'completed' | 'paused';
   steps: {
+    _id?: mongoose.Types.ObjectId;
     day: number;
     title: string;
     detail: string;

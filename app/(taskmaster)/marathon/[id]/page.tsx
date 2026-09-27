@@ -5,6 +5,9 @@ import { useParams, useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { MoveLeft, MoreVertical, Edit2, Trash2, Check } from 'lucide-react'
 import { triggerCompletionCannons } from '@/app/utils/confetti';
+import useSWR from 'swr'
+import { addToOutbox } from "@/app/lib/Offline-sync";
+
 
 // Define the shape of our data
 interface Step {
@@ -27,8 +30,15 @@ export default function MarathonExecutionPage() {
     const params = useParams();
     const id = params.id as string;
 
-    const [marathon, setMarathon] = useState<Marathon | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
+    // --- 1. SWR Data Fetching ---
+    // This completely replaces your fetch useEffect, loading state, and setMarathon state
+    const { data: marathonData, mutate, isLoading, error } = useSWR<{ success: boolean; marathon: Marathon }>(
+        id ? `/api/marathons/${id}` : null
+    );
+    
+    // Extract marathon for easy reference throughout the component
+    const marathon = marathonData?.marathon;
+
     const menuRef = useRef<HTMLDivElement>(null);
 
     // Close menu when clicking outside
@@ -47,6 +57,13 @@ export default function MarathonExecutionPage() {
     const [isEditingTitle, setIsEditingTitle] = useState(false);
     const [editTitleValue, setEditTitleValue] = useState("");
 
+    // Sync the edit title value once SWR fetches the marathon data
+    useEffect(() => {
+        if (marathon) {
+            setEditTitleValue(marathon.title);
+        }
+    }, [marathon?.title]);
+
     // Track which task is currently being edited
     const [editingTaskId, setEditingTaskId] = useState<number | null>(null);
 
@@ -55,26 +72,6 @@ export default function MarathonExecutionPage() {
 
     const [tempTitle, setTempTitle] = useState("");
     const [tempDetail, setTempDetail] = useState("");
-
-    // --- 1. Fetch Data ---
-    useEffect(() => {
-        if (!id) return;
-        const fetchMarathon = async () => {
-            try {
-                const response = await fetch(`/api/marathons/${id}`);
-                const data = await response.json();
-                if (data.success) {
-                    setMarathon(data.marathon);
-                    setEditTitleValue(data.marathon.title);
-                }
-            } catch (error) {
-                console.error("Failed to load");
-            } finally {
-                setIsLoading(false);
-            }
-        };
-        fetchMarathon();
-    }, [id]);
 
     // Helper for auto-resizing textareas during edit
     const autoResize = (element: HTMLTextAreaElement | null) => {
@@ -87,119 +84,239 @@ export default function MarathonExecutionPage() {
     // --- 2. API ACTIONS ---
 
     // A. Delete Marathon
-    const handleDelete = async () => {
-        setIsDeleting(true); // Shows a spinner on the button
-        await fetch(`/api/marathons/${id}`, { method: 'DELETE' });
-        router.push('/'); // Pop back to dashboard
+   const handleDelete = async () => {
+        // Prevent deleting a marathon that hasn't synced to DB yet
+        if (id.startsWith('temp_')) {
+            router.push('/'); 
+            return;
+        }
+
+        setIsDeleting(true); 
+
+        try {
+            const res = await fetch(`/api/marathons/${id}`, { method: 'DELETE' });
+            if (!res.ok) throw new Error("Failed to delete");
+            
+            mutate(); 
+            router.push('/'); 
+        } catch (err) {
+            if (!navigator.onLine) {
+                // 🚨 OFFLINE BYPASS
+                addToOutbox({
+                    type: 'DELETE_MARATHON',
+                    endpoint: `/api/marathons/${id}`,
+                    method: 'DELETE',
+                    body: null
+                });
+                router.push('/'); // Still push them back to dashboard offline!
+            } else {
+                setIsDeleting(false); // Server error: Stop the spinner
+            }
+        }
     };
 
     // B. Edit Marathon Title
     const handleSaveTitle = async () => {
         setIsEditingTitle(false);
-        if (!marathon || editTitleValue === marathon.title) return;
+        if (!marathon || !marathonData || editTitleValue === marathon.title) return;
 
-        // Optimistic UI Update
-        setMarathon({ ...marathon, title: editTitleValue });
+        // 1. Instant UI Update
+        mutate({ ...marathonData, marathon: { ...marathon, title: editTitleValue } }, false);
 
-        await fetch(`/api/marathons/${id}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'EDIT_TITLE', newTitle: editTitleValue })
-        });
+        try {
+            const res = await fetch(`/api/marathons/${id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'EDIT_TITLE', newTitle: editTitleValue })
+            });
+            if (!res.ok) throw new Error("Failed to edit title");
+            
+            mutate();
+        } catch (err) {
+            if (!navigator.onLine) {
+                // 🚨 OFFLINE BYPASS
+                addToOutbox({
+                    type: 'EDIT_MARATHON_TITLE',
+                    endpoint: `/api/marathons/${id}`,
+                    method: 'PATCH',
+                    body: { action: 'EDIT_TITLE', newTitle: editTitleValue }
+                });
+            } else {
+                // Rollback UI
+                mutate(marathonData, false);
+            }
+        }
     };
 
-    //toggle task check/uncheck
+    // toggle task check/uncheck
     const toggleTask = async (taskDay: number) => {
-        if (!marathon) return;
+        if (!marathon || !marathonData) return;
+
+        const prevIncomplete = marathon.steps.some(step => step.day < taskDay && !step.isCompleted);
+        if (prevIncomplete) return;
 
         const targetTask = marathon.steps.find(s => s.day === taskDay);
         if (!targetTask) return;
 
-        const newIsCompleted = !targetTask.isCompleted;
+        if (targetTask.isCompleted) {
+            const subsequentCompleted = marathon.steps.some(step => step.day > taskDay && step.isCompleted);
+            if (subsequentCompleted) return; 
+        }
 
+        const newIsCompleted = !targetTask.isCompleted;
         const updatedSteps = marathon.steps.map(step =>
             step.day === taskDay ? { ...step, isCompleted: newIsCompleted } : step
         );
 
         const isAllDone = updatedSteps.every(step => step.isCompleted);
-        // If they unchecked a box and it WAS completed, revert to 'active'.
         const newStatus = isAllDone ? 'completed' : (marathon.status === 'completed' ? 'active' : marathon.status);
 
-        // 3. INSTANT UI UPDATE (Update both the steps AND the status dropdown)
-        setMarathon({ ...marathon, steps: updatedSteps, status: newStatus });
+        // 1. INSTANT UI UPDATE
+        mutate({ ...marathonData, marathon: { ...marathon, steps: updatedSteps, status: newStatus as any } }, false);
 
-        // 4. Background Database Update: Save the specific task
-        await fetch(`/api/marathons/${id}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                action: 'EDIT_TASK',
-                day: taskDay,
-                isCompleted: newIsCompleted,
-                newTitle: targetTask.title, // Keep existing
-                newDetail: targetTask.detail // Keep existing
-            })
-        });
-
-        // 5. Background Database Update: Save the new Status (only if it changed!)
-        if (newStatus !== marathon.status) {
-            await fetch(`/api/marathons/${id}`, {
+        try {
+            // 2. Main API Call
+            const res1 = await fetch(`/api/marathons/${id}/toggle`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    action: 'EDIT_TITLE',
-                    newTitle: marathon.title,
-                    status: newStatus
+                    action: 'EDIT_TASK',
+                    day: taskDay,
+                    isCompleted: newIsCompleted,
                 })
             });
+            if (!res1.ok) throw new Error("Failed to toggle");
 
-            if (isAllDone) {
-                triggerCompletionCannons();
-                console.log("🏆 MARATHON COMPLETED!");
+            // 3. Second API Call (If status changed)
+            if (newStatus !== marathon.status) {
+                const res2 = await fetch(`/api/marathons/${id}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'EDIT_TITLE',
+                        newTitle: marathon.title,
+                        status: newStatus
+                    })
+                });
+                if (!res2.ok) throw new Error("Failed to update status");
+
+                if (isAllDone) {
+                    triggerCompletionCannons();
+                    console.log("🏆 MARATHON COMPLETED!");
+                }
+            }
+            
+            mutate();
+        } catch (err) {
+            if (!navigator.onLine) {
+                // 🚨 OFFLINE BYPASS: We might need to queue TWO outbox actions here!
+                addToOutbox({
+                    type: 'TOGGLE_MARATHON_STEP',
+                    endpoint: `/api/marathons/${id}/toggle`,
+                    method: 'PATCH',
+                    body: { action: 'EDIT_TASK', day: taskDay, isCompleted: newIsCompleted }
+                });
+
+                if (newStatus !== marathon.status) {
+                    addToOutbox({
+                        type: 'UPDATE_MARATHON_STATUS',
+                        endpoint: `/api/marathons/${id}`,
+                        method: 'PATCH',
+                        body: { action: 'EDIT_TITLE', newTitle: marathon.title, status: newStatus }
+                    });
+                    
+                    // Still trigger cannons offline! 🎉
+                    if (isAllDone) triggerCompletionCannons();
+                }
+            } else {
+                // Rollback
+                mutate(marathonData, false);
             }
         }
     };
 
-
-
     const handleUpdateStatus = async (newStatus: string) => {
-        if (!marathon) return;
-        setMarathon({ ...marathon, status: newStatus }); // Optimistic UI
+        if (!marathon || !marathonData) return;
+        
+        // 1. Instant UI
+        mutate({ ...marathonData, marathon: { ...marathon, status: newStatus as any } }, false); 
 
-        if(marathon.status === 'completed') return;
+        if (marathon.status === 'completed') {
+            mutate(); 
+            return;
+        }
 
-        await fetch(`/api/marathons/${id}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'EDIT_TITLE', newTitle: marathon.title, status: newStatus })
-        });
+        try {
+            const res = await fetch(`/api/marathons/${id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'EDIT_TITLE', newTitle: marathon.title, status: newStatus })
+            });
+            if (!res.ok) throw new Error("Failed to change status");
+            
+            mutate();
+        } catch (err) {
+            if (!navigator.onLine) {
+                 // 🚨 OFFLINE BYPASS
+                 addToOutbox({
+                    type: 'UPDATE_MARATHON_STATUS',
+                    endpoint: `/api/marathons/${id}`,
+                    method: 'PATCH',
+                    body: { action: 'EDIT_TITLE', newTitle: marathon.title, status: newStatus }
+                });
+            } else {
+                 mutate(marathonData, false);
+            }
+        }
     };
 
     // D. Save Task Text Edits
     const handleSaveTaskEdit = async (taskDay: number, updatedTitle: string, updatedDetail: string) => {
-        if (!marathon) return;
+        if (!marathon || !marathonData) return;
 
         const targetTask = marathon.steps.find(s => s.day === taskDay);
-        setEditingTaskId(null); // Close editor
+        setEditingTaskId(null); 
 
-        // Instant UI Update
+        // 1. Instant UI
         const updatedSteps = marathon.steps.map(step =>
             step.day === taskDay ? { ...step, title: updatedTitle, detail: updatedDetail } : step
         );
-        setMarathon({ ...marathon, steps: updatedSteps });
+        mutate({ ...marathonData, marathon: { ...marathon, steps: updatedSteps } }, false);
 
-        // Background Database Update
-        await fetch(`/api/marathons/${id}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                action: 'EDIT_TASK',
-                day: taskDay,
-                isCompleted: targetTask?.isCompleted || false,
-                newTitle: updatedTitle,
-                newDetail: updatedDetail
-            })
-        });
+        try {
+            const res = await fetch(`/api/marathons/${id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'EDIT_TASK',
+                    day: taskDay,
+                    isCompleted: targetTask?.isCompleted || false,
+                    newTitle: updatedTitle,
+                    newDetail: updatedDetail
+                })
+            });
+            if (!res.ok) throw new Error("Failed to edit step details");
+            
+            mutate();
+        } catch (err) {
+             if (!navigator.onLine) {
+                 // 🚨 OFFLINE BYPASS
+                 addToOutbox({
+                    type: 'EDIT_MARATHON_STEP_TEXT',
+                    endpoint: `/api/marathons/${id}`,
+                    method: 'PATCH',
+                    body: {
+                        action: 'EDIT_TASK',
+                        day: taskDay,
+                        isCompleted: targetTask?.isCompleted || false,
+                        newTitle: updatedTitle,
+                        newDetail: updatedDetail
+                    }
+                });
+             } else {
+                 mutate(marathonData, false);
+             }
+        }
     };
 
     if (isLoading) return <div className="p-8 min-h-screen text-center text-gray-500 pt-20">Loading your marathon...</div>;
@@ -211,7 +328,7 @@ export default function MarathonExecutionPage() {
             {/* --- TOP NAV BAR --- */}
             <div className="flex justify-between items-center  pt-5 pb-2 relative z-50">
                 <button
-                    onClick={() => router.back()}
+                    onClick={() => router.push('/')}
                     className="bg-black/5 hover:bg-black/10 p-2 rounded-full transition-colors"
                 >
                     <MoveLeft className="w-5 h-5 text-gray-700" />
@@ -261,7 +378,8 @@ export default function MarathonExecutionPage() {
                 <div className="relative inline-block mb-3">
                     <select
                         value={marathon.status || 'active'}
-                        onChange={(e) => handleUpdateStatus(e.target.value)}
+                        onChange={(e) => {
+                            marathon.status !== 'completed'? handleUpdateStatus(e.target.value): null}}
                         className="appearance-none bg-purple-100 text-purple-700 text-xs font-bold px-4 py-1.5 rounded-full outline-none cursor-pointer pr-8 text-center uppercase tracking-wider"
                     >
                         <option value="active">🟢 Active</option>
@@ -301,8 +419,14 @@ export default function MarathonExecutionPage() {
             {/* --- THE TIMELINE --- */}
             <div className="relative border-purple-100 ml-4 md:ml-6 pb-8">
                 {marathon.steps.map((task, index) => {
+
+                    const prevIncomplete = marathon.steps.some(step => step.day < task.day && !step.isCompleted);
+                    const subsequentCompleted = marathon.steps.some(step => step.day > task.day && step.isCompleted);
+
                     const isLast = index === marathon.steps.length - 1;
                     const isEditing = editingTaskId === task.day;
+
+                    const isLocked = (!task.isCompleted && prevIncomplete) || (task.isCompleted && subsequentCompleted);
 
                     return (
                         <motion.div
@@ -317,13 +441,22 @@ export default function MarathonExecutionPage() {
 
                             {/* The Timeline Dot / Checkmark */}
                             <div
-                                onClick={() => toggleTask(task.day)}
-                                className={`absolute z-10 -left-[17px] top-1 w-8 h-8 rounded-full border-2 flex items-center justify-center shadow-sm cursor-pointer transition-all duration-300 ${task.isCompleted
-                                    ? 'bg-purple-500 border-purple-500 text-white scale-110'
-                                    : 'bg-white border-purple-300 text-purple-700 hover:border-purple-500'
+                                // 2. Prevent onClick from firing if locked
+                                onClick={() => !isLocked && toggleTask(task.day)}
+                                className={`absolute z-10 -left-[17px] top-1 w-8 h-8 rounded-full  flex items-center justify-center transition-all duration-300 ${task.isCompleted
+                                    ? isLocked
+                                        ? 'bg-purple-400 text-white cursor-not-allowed ' // Completed, but locked from unchecking
+                                        : 'bg-[#8813db]  text-white scale-110 cursor-pointer shadow-md hover:bg-purple-700' // Completed, CAN uncheck
+                                    : isLocked
+                                        ? 'bg-white  text-purple-400 ring-2 ring-purple-200 cursor-not-allowed ' // Locked future step (faded)
+                                        : 'bg-white  text-purple-700 cursor-pointer scale-110 ring-2 ring-purple-500 shadow-sm' // The EXACT NEXT step (vibrant!)
                                     }`}
                             >
-                                {task.isCompleted ? <Check className="w-4 h-4 stroke-[3]" /> : <span className="text-xs font-bold">{task.day}</span>}
+                                {task.isCompleted ? (
+                                    <Check className="w-4 h-4 stroke-[3]" />
+                                ) : (
+                                    <span className="text-sm font-bold">{task.day}</span>
+                                )}
                             </div>
 
                             {/* Task Card */}

@@ -23,36 +23,36 @@ function Bottombar() {
   // Tracks the scroll position where the user last changed direction
   const pivot = useRef(0);
 
-  useMotionValueEvent(scrollY, "change", (latest) => {
-    const previous = scrollY.getPrevious() || 0;
+  // useMotionValueEvent(scrollY, "change", (latest) => {
+  //   const previous = scrollY.getPrevious() || 0;
 
-    if (isHidden) return;
+  //   if (isHidden) return;
 
-    // Always show the bar if the user scrolls all the way to the top
-    if (latest <= 0) {
-      setHidden(false);
-      return;
-    }
+  //   // Always show the bar if the user scrolls all the way to the top
+  //   if (latest <= 0) {
+  //     setHidden(false);
+  //     return;
+  //   }
 
-    // Determine if we are moving in a direction that should trigger a state change
-    const isScrollingDown = latest > previous;
+  //   // Determine if we are moving in a direction that should trigger a state change
+  //   const isScrollingDown = latest > previous;
 
-    if ((isScrollingDown && !hidden) || (!isScrollingDown && hidden)) {
-      // Check if the scroll distance has passed the 50px buffer
-      if (Math.abs(latest - pivot.current) > 150) {
-        setHidden(isScrollingDown);
-        pivot.current = latest; // Reset pivot after state change
-      }
-    } else {
-      // User changed direction, reset the pivot point to the current position
-      pivot.current = latest;
-    }
-  });
+  //   if ((isScrollingDown && !hidden) || (!isScrollingDown && hidden)) {
+  //     // Check if the scroll distance has passed the 50px buffer
+  //     if (Math.abs(latest - pivot.current) > 150) {
+  //       setHidden(isScrollingDown);
+  //       pivot.current = latest; // Reset pivot after state change
+  //     }
+  //   } else {
+  //     // User changed direction, reset the pivot point to the current position
+  //     pivot.current = latest;
+  //   }
+  // });
 
   const navLinks = [
     { name: "Home", href: "/", icon: House },
     { name: "Tasks", href: "/tasks", icon: CalendarIcon },
-    { name: "Ai", href: "/ai", icon: BotMessageSquare },
+    // { name: "Ai", href: "/ai", icon: BotMessageSquare },
     { name: "User", href: "/user", icon: User }
   ]
 
@@ -64,9 +64,9 @@ function Bottombar() {
       }}
       animate={hidden ? "hidden" : "visible"}
       transition={{ duration: 0.25, ease: "easeInOut" }}
-      className='fixed pb-[env(safe-area-inset-bottom)] bottom-0 h-18 bg-light max-w-md w-screen z-50 rounded-t-4xl'
+      className='fixed pvfb-[env(safe-area-inset-bottom)] bottom-0 py-2.5 pb-5 bg-light max-w-md w-screen z-50 rounded-t-4xl'
     >
-      <div className="h-full w-auto mx-4 pb-1.5  flex items-center justify-around">
+      <div className="h-full w-auto mx-4   flex items-center justify-around">
 
         {navLinks.map((link) => {
           const Icon = link.icon;
@@ -110,3 +110,6 @@ function Bottombar() {
 }
 
 export default Bottombar
+
+
+

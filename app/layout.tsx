@@ -13,12 +13,16 @@ import {
   Manrope,
   Funnel_Sans
 } from "next/font/google";
+import LenisProvider from "./lenisProvider";
+import { SWRprovider } from "./lib/SWRprovider";
+import OfflineSync from "./components/OfflineSync";
+
 
 
 const funnelSans = Funnel_Sans({
   subsets: ["latin"],
   // Funnel Sans is a variable font, but you can specify weights if needed
-  weight: ["300", "400", "500", "600", "700", "800"], 
+  weight: ["300", "400", "500", "600", "700", "800"],
   variable: "--font-funnel-sans", // Optional: for Tailwind integration
 });
 
@@ -124,13 +128,19 @@ export default function RootLayout({
           ${oswald.variable}
           ${archivo.variable}
           ${manrope.variable}
-          } antialiased`}
+           antialiased`}
       >
+        {/* <LenisProvider> */}
         <div className="relative w-full bg-app-main max-w-md mx-auto min-h-dvh overflow-x-clip">
-          <AuthProvider>
-            {children}
-          </AuthProvider>
+
+          <SWRprovider>
+            <AuthProvider>
+              <OfflineSync />
+              <script src="http://localhost:3000/widget.js?token=ce632f34-d54b-462f-aeb8-8d27f56a85a5" async></script>                {children}
+            </AuthProvider>
+          </SWRprovider>
         </div>
+        {/* </LenisProvider> */}
       </body>
     </html>
   );
